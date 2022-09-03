@@ -1,6 +1,6 @@
 import type { CreateUserAttrs } from '$services/types';
 import { client } from '$services/redis';
-import { usersKey } from '$services/keys';
+import { usersKey, usernamesUniqueKey } from '$services/keys';
 import { genId } from '$services/utils';
 
 
@@ -10,13 +10,21 @@ export const getUserByUsername = async (username: string) => {};
 export const getUserById = async (id: string) => {
     const user = await client.hGetAll(usersKey(id));
 
-    return deserialize(id, user)
+    return deserialize(id, user);
 };
 
 export const createUser = async (attrs: CreateUserAttrs) => {
     const id = genId();
 
-    await client.hSet(usersKey(id), serialize(attrs))
+    // see if username is already exist in the set of usersname
+    const exist = await client.sIsMember(usernamesUniqueKey(), attrs.username);
+    // if so throw new error
+    if(exist){
+        throw new Error("Username is taken!")
+    }
+    // otherwise set username in the usernam set
+    await client.sAdd(usernamesUniqueKey(), attrs.username);
+    await client.hSet(usersKey(id), serialize(attrs));
 
     // return id of user that was created
     return id;
