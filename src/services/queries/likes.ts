@@ -23,9 +23,9 @@ export const likeItem = async (itemId: string, userId: string) => {
 };
 
 export const unlikeItem = async (itemId: string, userId: string) => {
-	const remove = await client.sRem(userLikesItemKey(userId), itemId);
+	const removed = await client.sRem(userLikesItemKey(userId), itemId);
 
-	if (remove) {
+	if (removed) {
 		return await client.hIncrBy(itemsKey(itemId), 'likes', -1);
 	}
 };
