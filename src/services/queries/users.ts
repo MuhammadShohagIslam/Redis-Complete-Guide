@@ -42,7 +42,7 @@ export const createUser = async (attrs: CreateUserAttrs) => {
 	await client.hSet(usersKey(id), serialize(attrs));
 	await client.zAdd(usernamesKey(), {
 		value: attrs.username,
-		score: parseInt(id, 10)
+		score: parseInt(id, 16)
 	});
 
 	// return id of user that was created
