@@ -1,35 +1,43 @@
 import type { CreateUserAttrs } from '$services/types';
 import { client } from '$services/redis';
-import { usersKey, usernamesUniqueKey } from '$services/keys';
+import { usersKey, usernamesUniqueKey, usernames } from '$services/keys';
 import { genId } from '$services/utils';
-
-
 
 export const getUserByUsername = async (username: string) => {};
 
 export const getUserById = async (id: string) => {
-    const user = await client.hGetAll(usersKey(id));
+	const user = await client.hGetAll(usersKey(id));
 
-    return deserialize(id, user);
+	return deserialize(id, user);
 };
 
 export const createUser = async (attrs: CreateUserAttrs) => {
-    const id = genId();
+	const id = genId();
 
-    // see if username is already exist in the set of usersname
-    const exist = await client.sIsMember(usernamesUniqueKey(), attrs.username);
-    // if so throw new error
-    if(exist){
-        throw new Error("Username is taken!")
-    }
-    // otherwise set username in the usernam set
-    await client.sAdd(usernamesUniqueKey(), attrs.username);
-    await client.hSet(usersKey(id), serialize(attrs));
+	// see if username is already exist in the set of usersname
+	const exist = await client.sIsMember(usernamesUniqueKey(), attrs.username);
+	// if so throw new error
+	if (exist) {
+		throw new Error('Username is taken!');
+	}
+	// otherwise set username in the usernam set
+	await client.sAdd(usernamesUniqueKey(), attrs.username);
+	await client.hSet(usersKey(id), serialize(attrs));
+	await client.zAdd(usernames(), {
+		value: attrs.username,
+		score: parseInt(id, 10)
+	});
 
-    // return id of user that was created
-    return id;
-
+	// return id of user that was created
+	return id;
 };
+/*
+    *** Convert Hexa Number To Decimal Number ***
+        => In JavaScript, use: parseInt(hexaNumber, 10);
+
+    *** Convert Decimal Number To Hexa Number ***
+        => In JavaScript, use: decimalNumber.toString(16);
+*/
 
 /*
     *** Serialize Helper Function ***
@@ -46,14 +54,15 @@ export const createUser = async (attrs: CreateUserAttrs) => {
         1. Get an object ready to go INTO Redis as a hash
         2. Removes ID
         3. Turns dates into a queryable format.
+
 */
 
 const serialize = (user: CreateUserAttrs) => {
-    return {
-        username: user.username,
-        password: user.password
-    }
-}
+	return {
+		username: user.username,
+		password: user.password
+	};
+};
 
 /*
     *** DeSerialize Helper Function ***
@@ -78,10 +87,10 @@ const serialize = (user: CreateUserAttrs) => {
         3. Parse string numbers into plain numbers.
 */
 
-const deserialize = (id: string, user: {[key: string]: string}) => {
-    return{
-        id,
-        username: user.username,
-        password: user.password
-    }
-}
+const deserialize = (id: string, user: { [key: string]: string }) => {
+	return {
+		id,
+		username: user.username,
+		password: user.password
+	};
+};
