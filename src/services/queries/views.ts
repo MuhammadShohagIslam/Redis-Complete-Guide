@@ -1,12 +1,17 @@
 import { client } from '$services/redis';
-import { itemsByViewsKey, itemsKey } from '$services/keys';
+import { itemsByViewsKey, itemsKey, itemsViewsKey } from '$services/keys';
 
 export const incrementView = async (itemId: string, userId: string) => {
-	// through with promise all, we can send request multiple command
-	await Promise.all([
-		client.hIncrBy(itemsKey(itemId), 'views', 1),
-		client.zIncrBy(itemsByViewsKey(), 1, itemId)
-	]);
+	const inserted = await client.pfAdd(itemsViewsKey(itemId), userId);
+
+	// check if user not viewed item  increment the view, otherwise not increment
+	if (inserted) {
+		// through with promise all, we can send request multiple command
+		await Promise.all([
+			client.hIncrBy(itemsKey(itemId), 'views', 1),
+			client.zIncrBy(itemsByViewsKey(), 1, itemId)
+		]);
+	}
 };
 
 /*
