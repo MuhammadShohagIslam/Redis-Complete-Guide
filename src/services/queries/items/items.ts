@@ -73,7 +73,7 @@ export const createItem = async (attrs: CreateItemAttrs) => {
 			score: attrs.endingAt.toMillis()
 		}),
 		// setup the sorted set for items by pricing
-		client.zAdd(itemsByPriceKey(id), {
+		client.zAdd(itemsByPriceKey(), {
 			value:id,
 			score: 0
 		})

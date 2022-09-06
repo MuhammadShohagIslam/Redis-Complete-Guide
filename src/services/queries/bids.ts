@@ -1,35 +1,49 @@
 import type { CreateBidAttrs, Bid } from '$services/types';
 import { client } from '$services/redis';
-import { bidHistoryKey,itemsKey} from '$services/keys';
+import { bidHistoryKey, itemsKey, itemsByPriceKey } from '$services/keys';
 import { DateTime } from 'luxon';
 import { getItem } from './items';
 
 export const createBid = async (attrs: CreateBidAttrs) => {
-	const item = await getItem(attrs.itemId);
+	// create a brand new connection for tranction
+	return client.executeIsolated(async (isolatedClient) => {
+		/*
+			* create a watch, we are going to check to see. 
+			if that item has ever changes.if it does we are 
+			going to cancel automatically the tranction *
+		*/
+		isolatedClient.watch(itemsKey(attrs.itemId));
 
-	if(!item){
-		throw new Error("Item Does Not Exit!")
-	}
+		const item = await getItem(attrs.itemId);
 
-	if(item.price >= attrs.amount){
-		throw new Error("Bid too low!")
-	}
+		if (!item) {
+			throw new Error('Item Does Not Exit!');
+		}
 
-	if(item.createdAt.diff(DateTime.now()).toMillis() < 0){
-		throw new Error("Item closed to bid")
-	}
-	
-	const serialized = serializeHistory(attrs.amount, attrs.createdAt.toMillis());
+		if (item.price >= attrs.amount) {
+			throw new Error('Bid too low!');
+		}
 
-	await Promise.all([
-		client.rPush(bidHistoryKey(attrs.itemId), serialized),
-		client.hSet(itemsKey(item.id), {
-			bids: item.bids + 1,
-			price: attrs.amount,
-			highestBidUserId: attrs.userId
-			
-		})
-	])
+		if (item.createdAt.diff(DateTime.now()).toMillis() < 0) {
+			throw new Error('Item closed to bid');
+		}
+
+		const serialized = serializeHistory(attrs.amount, attrs.createdAt.toMillis());
+
+		return isolatedClient
+			.multi() // to tell redis is that we are about to issue a tranction
+			.rPush(bidHistoryKey(attrs.itemId), serialized)
+			.hSet(itemsKey(item.id), {
+				bids: item.bids + 1,
+				price: attrs.amount,
+				highestBidUserId: attrs.userId
+			})
+			.zAdd(itemsByPriceKey(), {
+				value: item.id,
+				score: attrs.amount
+			})
+			.exec();
+	});
 };
 
 export const getBidHistory = async (itemId: string, offset = 0, count = 10): Promise<Bid[]> => {
