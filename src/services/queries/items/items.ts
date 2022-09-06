@@ -1,9 +1,10 @@
 import { client } from '$services/redis';
 import type { CreateItemAttrs } from '$services/types';
 import { genId } from '$services/utils';
-import { itemsKey, itemsByViewsKey, itemsByEndingAtKey } from '$services/keys';
+import { itemsKey, itemsByViewsKey, itemsByEndingAtKey,itemsByPriceKey } from '$services/keys';
 import { serialize } from './serialize';
 import { deserialize } from './deserialize';
+
 
 export const getItem = async (id: string) => {
 	const item = await client.hGetAll(itemsKey(id));
@@ -70,6 +71,11 @@ export const createItem = async (attrs: CreateItemAttrs) => {
 		client.zAdd(itemsByEndingAtKey(),{
 			value: id,
 			score: attrs.endingAt.toMillis()
+		}),
+		// setup the sorted set for items by pricing
+		client.zAdd(itemsByPriceKey(id), {
+			value:id,
+			score: 0
 		})
 	]);
 
